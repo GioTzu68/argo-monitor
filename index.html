@@ -1,0 +1,166 @@
+<!doctype html><html lang="it"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ARGO · monitor remoto</title>
+<style>
+:root{--bg:#0e1116;--card:#181d25;--fg:#e6edf3;--mut:#8b949e;--acc:#4fd1c5;--bd:#222;--ok:#3fb950;--warn:#e3b341;--bad:#f85149}
+:root[data-theme="light"]{--bg:#f6f8fa;--card:#fff;--fg:#1f2328;--mut:#59636e;--acc:#1f9e94;--bd:#d0d7de;--ok:#1a7f37;--warn:#9a6700;--bad:#cf222e}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,Arial;background:var(--bg);color:var(--fg)}
+.wrap{max-width:760px;margin:0 auto;padding:22px}
+h1{font-size:19px;display:flex;align-items:center;gap:10px;margin:0}
+.top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--mut);display:inline-block}
+.dot.on{background:var(--ok)}.dot.off{background:var(--bad)}
+.mut{color:var(--mut);font-size:13px}a{color:var(--acc)}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-top:14px}
+h2{font-size:13px;margin:0 0 10px;color:var(--acc);text-transform:uppercase;letter-spacing:.04em}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+.stat{background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:12px}
+.stat .k{font-size:12px;color:var(--mut)}
+.stat .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:3px}
+.stat .u{font-size:13px;color:var(--mut);font-weight:400;margin-left:3px}
+.cells{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));gap:7px}
+.cell{background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:7px;text-align:center;font-variant-numeric:tabular-nums}
+.cell .n{font-size:10px;color:var(--mut)}.cell .cv{font-size:14px;font-weight:600}
+.cell.min{border-color:var(--acc)}.cell.max{border-color:var(--warn)}
+.pill{font-size:12px;border:1px solid var(--bd);border-radius:12px;padding:2px 9px;color:var(--mut)}
+.pill.act{color:var(--acc);border-color:var(--acc)}
+input,button{font-size:15px;border-radius:8px;padding:10px 14px}
+input{width:100%;border:1px solid var(--bd);background:var(--bg);color:var(--fg);margin:8px 0}
+button{background:var(--acc);color:#04211e;border:0;font-weight:600;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+.login{max-width:360px;margin:8vh auto}
+.err{color:var(--bad);font-size:13px;min-height:18px;margin-top:6px}
+.hide{display:none}
+.themeb{margin-left:auto;background:transparent;border:1px solid var(--bd);color:var(--fg);padding:6px 10px;font-size:13px}
+.logo rect{fill:var(--acc)}
+</style></head><body>
+
+<!-- LOGIN -->
+<div class="wrap login" id="login">
+  <h1><svg class="logo" width="34" height="22" viewBox="0 0 30 20"><rect x="1" y="3" width="24" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="26" y="7.5" width="3" height="5" rx="1" fill="currentColor"/><rect x="4" y="6" width="5" height="8"/><rect x="10.5" y="6" width="5" height="8"/></svg> ARGO</h1>
+  <div class="card">
+    <div class="mut" id="l_sub">Monitor remoto del BMS. Inserisci la password di sola lettura.</div>
+    <input id="pass" type="password" placeholder="Password" autocomplete="current-password">
+    <button id="go" style="width:100%">Connetti</button>
+    <div class="err" id="err"></div>
+  </div>
+  <div class="mut" style="text-align:center;margin-top:10px" id="l_note"></div>
+</div>
+
+<!-- DASHBOARD -->
+<div class="wrap hide" id="dash">
+  <div class="top">
+    <h1><svg class="logo" width="30" height="20" viewBox="0 0 30 20"><rect x="1" y="3" width="24" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="26" y="7.5" width="3" height="5" rx="1" fill="currentColor"/><rect x="4" y="6" width="5" height="8"/><rect x="10.5" y="6" width="5" height="8"/></svg> ARGO</h1>
+    <span class="pill"><span class="dot" id="dot"></span> <span id="conn">…</span></span>
+    <button class="themeb" id="theme">◐</button>
+  </div>
+
+  <div class="card"><h2 id="h_batt">Batteria</h2>
+    <div class="grid">
+      <div class="stat"><div class="k" id="k_v">Tensione pacco</div><div class="v"><span id="v_v">–</span><span class="u">V</span></div></div>
+      <div class="stat"><div class="k" id="k_i">Corrente</div><div class="v"><span id="v_i">–</span><span class="u">A</span></div></div>
+      <div class="stat"><div class="k" id="k_p">Potenza</div><div class="v"><span id="v_p">–</span><span class="u">W</span></div></div>
+      <div class="stat"><div class="k" id="k_soc">SOC</div><div class="v"><span id="v_soc">–</span><span class="u">%</span></div></div>
+      <div class="stat"><div class="k" id="k_soh">SOH</div><div class="v"><span id="v_soh">–</span><span class="u">%</span></div></div>
+      <div class="stat"><div class="k" id="k_st">Stato</div><div class="v" style="font-size:16px"><span class="pill" id="v_st">–</span></div></div>
+    </div>
+  </div>
+
+  <div class="card"><h2 id="h_cells">Celle</h2>
+    <div class="grid" style="margin-bottom:12px">
+      <div class="stat"><div class="k" id="k_cmin">Min</div><div class="v"><span id="v_cmin">–</span><span class="u">V</span></div></div>
+      <div class="stat"><div class="k" id="k_cmax">Max</div><div class="v"><span id="v_cmax">–</span><span class="u">V</span></div></div>
+      <div class="stat"><div class="k" id="k_cavg">Media</div><div class="v"><span id="v_cavg">–</span><span class="u">V</span></div></div>
+      <div class="stat"><div class="k" id="k_cd">Δ</div><div class="v"><span id="v_cd">–</span><span class="u">V</span></div></div>
+    </div>
+    <div class="cells" id="cells"></div>
+  </div>
+
+  <div class="card"><h2 id="h_temp">Temperature &amp; bilanciamento</h2>
+    <div class="grid">
+      <div class="stat"><div class="k" id="k_tmos">MOSFET</div><div class="v"><span id="v_tmos">–</span><span class="u">°C</span></div></div>
+      <div class="stat"><div class="k">T1</div><div class="v"><span id="v_t1">–</span><span class="u">°C</span></div></div>
+      <div class="stat"><div class="k">T2</div><div class="v"><span id="v_t2">–</span><span class="u">°C</span></div></div>
+      <div class="stat"><div class="k" id="k_bal">Bilanciamento</div><div class="v" style="font-size:16px"><span class="pill" id="v_bal">–</span></div></div>
+      <div class="stat"><div class="k" id="k_bi">Corrente bilanc.</div><div class="v"><span id="v_bi">–</span><span class="u">A</span></div></div>
+      <div class="stat"><div class="k" id="k_cyc">Cicli</div><div class="v"><span id="v_cyc">–</span></div></div>
+    </div>
+  </div>
+
+  <div class="mut" style="margin-top:14px;display:flex;gap:14px;flex-wrap:wrap">
+    <span id="l_upd">Ultimo aggiornamento: <b id="v_upd">–</b></span>
+    <span>·</span><span id="l_fw">FW <b id="v_fw">–</b></span>
+    <span>·</span><a href="#" id="logout">Esci</a>
+  </div>
+</div>
+
+<!-- MQTT.js over WebSocket -->
+<script src="https://cdn.jsdelivr.net/npm/mqtt/dist/mqtt.min.js"></script>
+<script>
+// ===================== CONFIG (compila HOST dopo aver creato il cluster HiveMQ) =====================
+const CFG={
+  host:  "69df4885ba934fbfb983a1d1c2b51ac6.s1.eu.hivemq.cloud", // hostname cluster HiveMQ
+  port:  8884,                              // WSS (WebSocket Secure) del broker
+  user:  "argo-sub",                        // utente SOLO-subscribe (read-only)
+  base:  "argo/jkbms"                       // deve combaciare con CLOUD_MQTT_TOPIC del firmware
+};
+// ====================================================================================================
+const $=i=>document.getElementById(i);
+const IT=(navigator.language||'').startsWith('it');
+const D=IT?{sub:'Monitor remoto del BMS. Inserisci la password di sola lettura.',note:'La password non viene salvata nel sito: resta solo nel tuo browser.',conn:'Connetti',online:'online',offline:'offline',connecting:'connessione…',reconn:'riconnessione…',err:'Password errata o broker non raggiungibile.',charging:'in carica',discharging:'in scarica',idle:'a riposo',on:'attivo',off:'spento',never:'mai',bmsoff:'BMS offline'}
+                :{sub:'Remote BMS monitor. Enter the read-only password.',note:'The password is not stored on the site: it stays only in your browser.',conn:'Connect',online:'online',offline:'offline',connecting:'connecting…',reconn:'reconnecting…',err:'Wrong password or broker unreachable.',charging:'charging',discharging:'discharging',idle:'idle',on:'on',off:'off',never:'never',bmsoff:'BMS offline'};
+$('l_sub').textContent=D.sub;$('l_note').textContent=D.note;$('go').textContent=D.conn;
+
+// tema
+const root=document.documentElement;
+root.setAttribute('data-theme',localStorage.theme||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'));
+$('theme').onclick=()=>{const t=root.getAttribute('data-theme')==='dark'?'light':'dark';root.setAttribute('data-theme',t);localStorage.theme=t;};
+
+let client=null, avail='offline';
+function setConn(state){const on=state==='online';$('dot').className='dot '+(on?'on':(state==='offline'?'off':''));
+  $('conn').textContent=state==='online'?D.online:(state==='offline'?D.offline:(state==='reconn'?D.reconn:D.connecting));}
+const f=(x,d)=>{const n=Number(x);return isFinite(n)?n.toFixed(d):'–'};
+
+function connect(pass){
+  $('go').disabled=true;$('err').textContent='';
+  const url=`wss://${CFG.host}:${CFG.port}/mqtt`;
+  const cid='argo-web-'+Math.random().toString(16).slice(2,10);
+  client=mqtt.connect(url,{username:CFG.user,password:pass,clientId:cid,clean:true,connectTimeout:8000,reconnectPeriod:4000});
+  let opened=false;
+  client.on('connect',()=>{opened=true;sessionStorage.argopass=pass;
+    $('login').classList.add('hide');$('dash').classList.remove('hide');setConn('connecting');
+    client.subscribe(CFG.base+'/state');client.subscribe(CFG.base+'/availability');});
+  client.on('message',(t,p)=>{const s=p.toString();
+    if(t.endsWith('/availability')){avail=s;setConn(s==='online'?'online':'offline');return;}
+    try{render(JSON.parse(s));setConn(avail==='online'?'online':'online');}catch(e){}});
+  client.on('reconnect',()=>{if(opened)setConn('reconn');});
+  client.on('error',e=>{if(!opened){$('err').textContent=D.err;$('go').disabled=false;try{client.end(true)}catch(_){}}});
+  client.on('close',()=>{if(!opened){$('go').disabled=false;}});
+}
+function render(d){
+  $('v_v').textContent=f(d.pack_v,2);$('v_i').textContent=f(d.current,2);$('v_p').textContent=f(d.power,0);
+  $('v_soc').textContent=(d.soc_precise!=null?f(d.soc_precise,1):f(d.soc,0));$('v_soh').textContent=f(d.soh,0);
+  const st=$('v_st');
+  if(!d.bms_online){st.textContent=D.bmsoff;st.className='pill';}
+  else if(d.charging){st.textContent=D.charging;st.className='pill act';}
+  else if(d.discharging){st.textContent=D.discharging;st.className='pill act';}
+  else{st.textContent=D.idle;st.className='pill';}
+  $('v_cmin').textContent=f(d.cell_min,3);$('v_cmax').textContent=f(d.cell_max,3);
+  $('v_cavg').textContent=f(d.cell_avg,3);$('v_cd').textContent=f(d.cell_delta,3);
+  const box=$('cells');const cv=d.cells_v||[];box.innerHTML='';
+  cv.forEach((v,i)=>{const c=document.createElement('div');c.className='cell'+(v===d.cell_min?' min':'')+(v===d.cell_max?' max':'');
+    c.innerHTML=`<div class="n">${i+1}</div><div class="cv">${f(v,3)}</div>`;box.appendChild(c);});
+  $('v_tmos').textContent=f(d.t_mos,1);$('v_t1').textContent=f(d.t1,1);$('v_t2').textContent=f(d.t2,1);
+  $('v_bal').textContent=d.balancing?D.on:D.off;$('v_bal').className='pill'+(d.balancing?' act':'');
+  $('v_bi').textContent=f(d.balance_current,2);$('v_cyc').textContent=(d.cycles!=null?d.cycles:'–');
+  $('v_fw').textContent=d.fw||'–';
+  const now=new Date();$('v_upd').textContent=now.toLocaleTimeString();
+}
+$('go').onclick=()=>{const p=$('pass').value;if(!p)return;connect(p);};
+$('pass').addEventListener('keydown',e=>{if(e.key==='Enter')$('go').click();});
+$('logout').onclick=e=>{e.preventDefault();sessionStorage.removeItem('argopass');try{client&&client.end(true)}catch(_){}
+  $('dash').classList.add('hide');$('login').classList.remove('hide');$('go').disabled=false;$('pass').value='';};
+// auto-riconnessione nella stessa sessione
+if(sessionStorage.argopass)connect(sessionStorage.argopass);
+</script>
+</body></html>
