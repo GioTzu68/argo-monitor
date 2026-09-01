@@ -88,9 +88,16 @@ button:disabled{opacity:.5;cursor:default}
     </div>
   </div>
 
-  <div class="mut" style="margin-top:14px;display:flex;gap:14px;flex-wrap:wrap">
+  <div class="mut" style="margin-top:14px;display:flex;gap:14px;flex-wrap:wrap;align-items:center">
     <span id="l_upd">Ultimo aggiornamento: <b id="v_upd">–</b></span>
     <span>·</span><span id="l_fw">FW <b id="v_fw">–</b></span>
+    <span>·</span><span><span id="l_net">Rete</span> <b id="v_net">–</b></span>
+    <!-- Il collegamento alla pagina tecnica del dispositivo. Si costruisce dall'IP che il
+         firmware gia' pubblica nello stato, e compare solo se quell'IP c'e'. Funziona SOLO
+         da dentro la rete di casa: l'ESP32 sta dietro il router e da fuori non e'
+         raggiungibile. Una navigazione da HTTPS a HTTP e' permessa (non e' mixed content,
+         che riguarda le risorse incorporate e le fetch); percio' e' un <a>, non un fetch. -->
+    <span>·</span><a href="#" id="tech" class="hide" target="_blank" rel="noopener">Tecnica</a>
     <span>·</span><a href="#" id="logout">Esci</a>
   </div>
 </div>
@@ -108,9 +115,10 @@ const CFG={
 // ====================================================================================================
 const $=i=>document.getElementById(i);
 const IT=(navigator.language||'').startsWith('it');
-const D=IT?{sub:'Monitor remoto del BMS. Inserisci la password di sola lettura.',note:'La password non viene salvata nel sito: resta solo nel tuo browser.',conn:'Connetti',online:'online',offline:'offline',connecting:'connessione…',reconn:'riconnessione…',err:'Password errata o broker non raggiungibile.',charging:'in carica',discharging:'in scarica',idle:'a riposo',on:'attivo',off:'spento',never:'mai',bmsoff:'BMS offline'}
-                :{sub:'Remote BMS monitor. Enter the read-only password.',note:'The password is not stored on the site: it stays only in your browser.',conn:'Connect',online:'online',offline:'offline',connecting:'connecting…',reconn:'reconnecting…',err:'Wrong password or broker unreachable.',charging:'charging',discharging:'discharging',idle:'idle',on:'on',off:'off',never:'never',bmsoff:'BMS offline'};
+const D=IT?{sub:'Monitor remoto del BMS. Inserisci la password di sola lettura.',note:'La password non viene salvata nel sito: resta solo nel tuo browser.',conn:'Connetti',online:'online',offline:'offline',connecting:'connessione…',reconn:'riconnessione…',err:'Password errata o broker non raggiungibile.',charging:'in carica',discharging:'in scarica',idle:'a riposo',on:'attivo',off:'spento',never:'mai',bmsoff:'BMS offline',net:'Rete',tech:'Tecnica',techt:'Pagina tecnica del dispositivo — si apre solo dalla rete di casa'}
+                :{sub:'Remote BMS monitor. Enter the read-only password.',note:'The password is not stored on the site: it stays only in your browser.',conn:'Connect',online:'online',offline:'offline',connecting:'connecting…',reconn:'reconnecting…',err:'Wrong password or broker unreachable.',charging:'charging',discharging:'discharging',idle:'idle',on:'on',off:'off',never:'never',bmsoff:'BMS offline',net:'Network',tech:'Tech',techt:'Device technical page — opens only from the home network'};
 $('l_sub').textContent=D.sub;$('l_note').textContent=D.note;$('go').textContent=D.conn;
+$('l_net').textContent=D.net;$('tech').textContent=D.tech;$('tech').title=D.techt;
 
 // tema
 const root=document.documentElement;
@@ -155,6 +163,16 @@ function render(d){
   $('v_bal').textContent=d.balancing?D.on:D.off;$('v_bal').className='pill'+(d.balancing?' act':'');
   $('v_bi').textContent=f(d.balance_current,2);$('v_cyc').textContent=(d.cycles!=null?d.cycles:'–');
   $('v_fw').textContent=d.fw||'–';
+  // Rete e segnale: il firmware li pubblica gia' nello stato, non costano una riga in piu'
+  // di traffico e dicono subito se il dispositivo e' sulla rete che pensi.
+  $('v_net').textContent=d.ssid ? d.ssid+(d.rssi!=null?' ('+d.rssi+' dBm)':'') : '–';
+  // Il collegamento alla pagina tecnica compare solo se l'IP c'e' ed e' un indirizzo vero:
+  // a schede appena accese capita di pubblicare 0.0.0.0, e un link a quello sarebbe peggio
+  // che nessun link.
+  const t=$('tech');
+  if(d.ip && /^\d{1,3}(\.\d{1,3}){3}$/.test(d.ip) && d.ip!=='0.0.0.0'){
+    t.href='http://'+d.ip+'/tech'; t.textContent=D.tech+' · '+d.ip; t.classList.remove('hide');
+  } else t.classList.add('hide');
   const now=new Date();$('v_upd').textContent=now.toLocaleTimeString();
 }
 $('go').onclick=()=>{const p=$('pass').value;if(!p)return;connect(p);};
