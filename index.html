@@ -32,6 +32,10 @@ button:disabled{opacity:.5;cursor:default}
 .login{max-width:360px;margin:8vh auto}
 .err{color:var(--bad);font-size:13px;min-height:18px;margin-top:6px}
 .hide{display:none}
+.rem{display:flex;gap:8px;align-items:center;margin:2px 0 12px;cursor:pointer}
+.rem input{width:auto;margin:0}
+#qr{display:flex;justify-content:center;margin:12px 0}
+#qr svg{width:220px;max-width:100%;height:auto;background:#fff;border-radius:8px}
 .themeb{margin-left:auto;background:transparent;border:1px solid var(--bd);color:var(--fg);padding:6px 10px;font-size:13px}
 .logo rect{fill:var(--acc)}
 </style></head><body>
@@ -42,6 +46,7 @@ button:disabled{opacity:.5;cursor:default}
   <div class="card">
     <div class="mut" id="l_sub">Monitor remoto del BMS. Inserisci la password di sola lettura.</div>
     <input id="pass" type="password" placeholder="Password" autocomplete="current-password">
+    <label class="mut rem"><input type="checkbox" id="rem" checked> <span id="l_rem"></span></label>
     <button id="go" style="width:100%">Connetti</button>
     <div class="err" id="err"></div>
   </div>
@@ -98,12 +103,23 @@ button:disabled{opacity:.5;cursor:default}
          raggiungibile. Una navigazione da HTTPS a HTTP e' permessa (non e' mixed content,
          che riguarda le risorse incorporate e le fetch); percio' e' un <a>, non un fetch. -->
     <span>·</span><a href="#" id="tech" class="hide" target="_blank" rel="noopener">Tecnica</a>
+    <span>·</span><a href="#" id="share_a">Collega un altro dispositivo</a>
     <span>·</span><a href="#" id="logout">Esci</a>
+  </div>
+
+  <div class="card hide" id="share">
+    <h2 id="h_share"></h2>
+    <div class="mut" id="t_share"></div>
+    <div id="qr"></div>
+    <input id="share_link" type="text" readonly>
+    <button id="share_copy" style="width:100%"></button>
+    <div class="err" id="share_msg" style="min-height:18px"></div>
   </div>
 </div>
 
 <!-- MQTT.js over WebSocket -->
 <script src="https://cdn.jsdelivr.net/npm/mqtt/dist/mqtt.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script>
 // ===================== CONFIG (compila HOST dopo aver creato il cluster HiveMQ) =====================
 const CFG={
@@ -115,9 +131,9 @@ const CFG={
 // ====================================================================================================
 const $=i=>document.getElementById(i);
 const IT=(navigator.language||'').startsWith('it');
-const D=IT?{sub:'Monitor remoto del BMS. Inserisci la password di sola lettura.',note:'La password non viene salvata nel sito: resta solo nel tuo browser.',conn:'Connetti',online:'online',offline:'offline',connecting:'connessione…',reconn:'riconnessione…',err:'Password errata o broker non raggiungibile.',charging:'in carica',discharging:'in scarica',idle:'a riposo',on:'attivo',off:'spento',never:'mai',bmsoff:'BMS offline',net:'Rete',tech:'Tecnica',techt:'Pagina tecnica del dispositivo — si apre solo dalla rete di casa'}
-                :{sub:'Remote BMS monitor. Enter the read-only password.',note:'The password is not stored on the site: it stays only in your browser.',conn:'Connect',online:'online',offline:'offline',connecting:'connecting…',reconn:'reconnecting…',err:'Wrong password or broker unreachable.',charging:'charging',discharging:'discharging',idle:'idle',on:'on',off:'off',never:'never',bmsoff:'BMS offline',net:'Network',tech:'Tech',techt:'Device technical page — opens only from the home network'};
-$('l_sub').textContent=D.sub;$('l_note').textContent=D.note;$('go').textContent=D.conn;
+const D=IT?{sub:'Monitor remoto del BMS. Inserisci la password di sola lettura.',note:'La password non viene salvata nel sito: resta solo nel tuo browser.',rem:'Ricordami su questo dispositivo',share:'Collega un altro dispositivo',shareh:'Collega un altro dispositivo',sharet:'Inquadra il QR con il nuovo dispositivo, oppure copia il link e aprilo li. Contiene la password di sola lettura: mostralo solo a chi vuoi.',copy:'Copia il link',copied:'Link copiato',copyfail:'Copia non riuscita: seleziona il link e copialo a mano',conn:'Connetti',online:'online',offline:'offline',connecting:'connessione…',reconn:'riconnessione…',err:'Password errata o broker non raggiungibile.',charging:'in carica',discharging:'in scarica',idle:'a riposo',on:'attivo',off:'spento',never:'mai',bmsoff:'BMS offline',net:'Rete',tech:'Tecnica',techt:'Pagina tecnica del dispositivo — si apre solo dalla rete di casa'}
+                :{sub:'Remote BMS monitor. Enter the read-only password.',note:'The password is not stored on the site: it stays only in your browser.',rem:'Remember me on this device',share:'Connect another device',shareh:'Connect another device',sharet:'Scan the QR with the new device, or copy the link and open it there. It contains the read-only password: show it only to people you trust.',copy:'Copy link',copied:'Link copied',copyfail:'Copy failed: select the link and copy it by hand',conn:'Connect',online:'online',offline:'offline',connecting:'connecting…',reconn:'reconnecting…',err:'Wrong password or broker unreachable.',charging:'charging',discharging:'discharging',idle:'idle',on:'on',off:'off',never:'never',bmsoff:'BMS offline',net:'Network',tech:'Tech',techt:'Device technical page — opens only from the home network'};
+$('l_sub').textContent=D.sub;$('l_note').textContent=D.note;$('l_rem').textContent=D.rem;$('share_a').textContent=D.share;$('h_share').textContent=D.shareh;$('t_share').textContent=D.sharet;$('share_copy').textContent=D.copy;$('go').textContent=D.conn;
 $('l_net').textContent=D.net;$('tech').textContent=D.tech;$('tech').title=D.techt;
 
 // tema
@@ -125,25 +141,33 @@ const root=document.documentElement;
 root.setAttribute('data-theme',localStorage.theme||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'));
 $('theme').onclick=()=>{const t=root.getAttribute('data-theme')==='dark'?'light':'dark';root.setAttribute('data-theme',t);localStorage.theme=t;};
 
-let client=null, avail='offline';
+// Dove sta la password: con «ricordami» in localStorage (resta dopo la chiusura del browser),
+// senza in sessionStorage (solo finche' il tab e' aperto). Sempre una sola copia, mai due.
+const store={
+  get(){try{return localStorage.argopass||sessionStorage.argopass||''}catch(_){return ''}},
+  persisted(){try{return !!localStorage.argopass}catch(_){return false}},
+  set(p,persist){try{localStorage.removeItem('argopass');sessionStorage.removeItem('argopass');(persist?localStorage:sessionStorage).argopass=p}catch(_){}},
+  clear(){try{localStorage.removeItem('argopass');sessionStorage.removeItem('argopass')}catch(_){}}
+};
+let client=null, avail='offline', curPass='';
 function setConn(state){const on=state==='online';$('dot').className='dot '+(on?'on':(state==='offline'?'off':''));
   $('conn').textContent=state==='online'?D.online:(state==='offline'?D.offline:(state==='reconn'?D.reconn:D.connecting));}
 const f=(x,d)=>{const n=Number(x);return isFinite(n)?n.toFixed(d):'–'};
 
-function connect(pass){
+function connect(pass,persist){
   $('go').disabled=true;$('err').textContent='';
   const url=`wss://${CFG.host}:${CFG.port}/mqtt`;
   const cid='argo-web-'+Math.random().toString(16).slice(2,10);
   client=mqtt.connect(url,{username:CFG.user,password:pass,clientId:cid,clean:true,connectTimeout:8000,reconnectPeriod:4000});
   let opened=false;
-  client.on('connect',()=>{opened=true;sessionStorage.argopass=pass;
+  client.on('connect',()=>{opened=true;curPass=pass;store.set(pass,persist);
     $('login').classList.add('hide');$('dash').classList.remove('hide');setConn('connecting');
     client.subscribe(CFG.base+'/state');client.subscribe(CFG.base+'/availability');});
   client.on('message',(t,p)=>{const s=p.toString();
     if(t.endsWith('/availability')){avail=s;setConn(s==='online'?'online':'offline');return;}
     try{render(JSON.parse(s));setConn(avail==='online'?'online':'online');}catch(e){}});
   client.on('reconnect',()=>{if(opened)setConn('reconn');});
-  client.on('error',e=>{if(!opened){$('err').textContent=D.err;$('go').disabled=false;try{client.end(true)}catch(_){}}});
+  client.on('error',e=>{if(!opened){store.clear();$('err').textContent=D.err;$('go').disabled=false;try{client.end(true)}catch(_){}}});
   client.on('close',()=>{if(!opened){$('go').disabled=false;}});
 }
 function render(d){
@@ -175,11 +199,31 @@ function render(d){
   } else t.classList.add('hide');
   const now=new Date();$('v_upd').textContent=now.toLocaleTimeString();
 }
-$('go').onclick=()=>{const p=$('pass').value;if(!p)return;connect(p);};
+$('go').onclick=()=>{const p=$('pass').value;if(!p)return;connect(p,$('rem').checked);};
 $('pass').addEventListener('keydown',e=>{if(e.key==='Enter')$('go').click();});
-$('logout').onclick=e=>{e.preventDefault();sessionStorage.removeItem('argopass');try{client&&client.end(true)}catch(_){}
+$('logout').onclick=e=>{e.preventDefault();store.clear();curPass='';$('share').classList.add('hide');$('qr').innerHTML='';$('share_link').value='';try{client&&client.end(true)}catch(_){}
   $('dash').classList.add('hide');$('login').classList.remove('hide');$('go').disabled=false;$('pass').value='';};
-// auto-riconnessione nella stessa sessione
-if(sessionStorage.argopass)connect(sessionStorage.argopass);
+// Collega un altro dispositivo: link (e QR) con la password nel frammento dopo #, che il browser
+// NON invia a nessun server. Chi lo apre la legge, la usa e il frammento sparisce dalla barra.
+$('share_a').onclick=e=>{e.preventDefault();
+  const box=$('share');
+  if(!box.classList.contains('hide')){box.classList.add('hide');return;}
+  if(!curPass)return;
+  const link=location.origin+location.pathname+'#p='+encodeURIComponent(curPass);
+  $('share_link').value=link;$('share_msg').textContent='';
+  try{const q=qrcode(0,'M');q.addData(link);q.make();$('qr').innerHTML=q.createSvgTag(5,20);}
+  catch(_){$('qr').innerHTML='';}
+  box.classList.remove('hide');box.scrollIntoView({behavior:'smooth',block:'nearest'});};
+$('share_copy').onclick=async()=>{const l=$('share_link').value;
+  try{await navigator.clipboard.writeText(l);$('share_msg').style.color='var(--ok)';$('share_msg').textContent=D.copied;}
+  catch(_){$('share_link').select();$('share_msg').style.color='var(--bad)';$('share_msg').textContent=D.copyfail;}};
+
+// avvio: password nel link (#p=...) > password ricordata. Il frammento si toglie SUBITO dalla barra.
+let hashPass='';
+{const m=location.hash.match(/^#p=(.+)$/);
+ if(m){try{hashPass=decodeURIComponent(m[1]);}catch(_){}
+   history.replaceState(null,'',location.pathname+location.search);}}
+if(hashPass)connect(hashPass,$('rem').checked);
+else{const sp=store.get();if(sp)connect(sp,store.persisted());}
 </script>
 </body></html>
